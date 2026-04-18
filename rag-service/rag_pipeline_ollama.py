@@ -427,39 +427,60 @@ class OllamaRAG:
         ])
 
         if lang == 'tamil':
-            prompt = f"""நீங்கள் ஒரு விவசாய நிபுணர். கீழே உள்ள தகவல்களை பயன்படுத்தி தமிழில் மட்டும் 3-4 வரிகளில் பதில் சொல்லுங்கள்.
+            prompt = f"""நீங்கள் ஒரு விவசாய நிபுணர்.
 
-    தகவல்கள்:
-    {context}
+        முதலில், கேள்வி விவசாயம், பயிர், மண், உரம், பூச்சிக்கொல்லி, நீர்ப்பாசனம், கால்நடை அல்லது விவசாயம் தொடர்பானதா என்று தீர்மானிக்கவும்.
 
-    கேள்வி: {original_question}
+        விவசாயம் தொடர்பானது என்றால்:
+        கீழே உள்ள தகவல்களை பயன்படுத்தி தமிழில் 3-4 வரிகளில் பதில் சொல்லுங்கள்.
 
-    தமிழில் பதில்:"""
+        விவசாயம் தொடர்பில்லாதது என்றால்:
+        உங்கள் சொந்த அறிவை பயன்படுத்தி தமிழில் நேரடியாக பதில் சொல்லுங்கள்.
+
+        தகவல்கள்:
+        {context}
+
+        கேள்வி: {original_question}
+
+        பதில்:"""
 
         elif lang == 'tanglish':
             prompt = f"""You are an expert agricultural assistant for Tamil Nadu farmers.
-    The farmer asked in Tanglish: "{original_question}"
-    This means: "{search_question}"
+        The farmer asked in Tanglish: "{original_question}"
+        This means: "{search_question}"
 
-    Use the context below and answer in Tamil language (Tamil script) in 3-4 lines.
-    The farmer understands Tamil so reply in Tamil script.
+        First check if this question is agriculture related or not.
 
-    Context:
-    {context}
+        If agriculture related:
+        Use the context and answer in Tamil script in 3-4 lines.
 
-    Tamil Answer:"""
+        If NOT agriculture related:
+        Answer directly in Tamil script from your own knowledge in 2-3 lines.
+        Do NOT force an agricultural answer.
+
+        Context:
+        {context}
+
+        Tamil Answer:"""
 
         else:  # English
             prompt = f"""You are an expert agricultural assistant for Tamil Nadu farmers.
-    Use the context below to answer in clear English in 3-4 lines.
-    If context is not enough, use your own agricultural knowledge.
 
-    Context:
-    {context}
+        First, determine if the question is related to agriculture, farming, crops, soil, fertilizers, pesticides, irrigation, weather, livestock, government schemes for farmers, or any farming-related topic.
 
-    Question: {original_question}
+        If YES - agriculture related:
+        Use the context below and answer clearly in 3-4 lines.
 
-    Answer:"""
+        If NO - not agriculture related:
+        Answer the question directly from your own knowledge in 2-3 lines without mentioning agriculture.
+        Do NOT force an agricultural answer for non-agricultural questions.
+
+        Context:
+        {context}
+
+        Question: {original_question}
+
+        Answer:"""
 
         return prompt
 
