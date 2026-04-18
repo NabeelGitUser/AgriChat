@@ -38,6 +38,13 @@ services:
     container_name: rag-service
     ports:
       - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     volumes:
       - ./rag-service/knowledge_base:/app/knowledge_base
       - ./rag-service/rag_index_index.faiss:/app/rag_index_index.faiss

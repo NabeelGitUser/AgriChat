@@ -119,8 +119,9 @@ def initialize_rag_system():
         # Initialize RAG
         rag_system = OllamaRAG(
             model_name=OLLAMA_MODEL,
-            vector_store=vector_store
-        )
+            vector_store=vector_store,
+            ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434")
+        )   
         logger.info(f"✓ RAG system initialized with model: {OLLAMA_MODEL}")
         
         is_initialized = True
