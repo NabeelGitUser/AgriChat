@@ -1,0 +1,31 @@
+use_default_settings: true
+
+server:
+  secret_key: "supersecretkey"
+  limiter: false
+  # Inside Docker the base_url must match the internal port
+  base_url: "http://searxng:8080/"
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
