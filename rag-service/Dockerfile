@@ -13,6 +13,6 @@ COPY app.py .
 COPY rag_pipeline_ollama.py .
 COPY rag_cli_ollama.py .
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD ["python", "app.py"]
