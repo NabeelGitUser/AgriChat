@@ -1,0 +1,70 @@
+version: "3.8"
+
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - agri_network
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./web-search-service/settings.yml:/etc/searxng/settings.yml
+    networks:
+      - agri_network
+    restart: unless-stopped
+
+  rag-service:
+    build:
+      context: ./rag-service
+      dockerfile: Dockerfile
+    container_name: rag-service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./rag-service/knowledge_base:/app/knowledge_base
+      - ./rag-service/rag_index_index.faiss:/app/rag_index_index.faiss
+      - ./rag-service/rag_index_chunks.pkl:/app/rag_index_chunks.pkl
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=gemma3:4b
+    depends_on:
+      - ollama
+    networks:
+      - agri_network
+    restart: unless-stopped
+
+  search-service:
+    build:
+      context: ./web-search-service
+      dockerfile: Dockerfile
+    container_name: search-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SEARXNG_URL=http://searxng:8080/search
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=gemma3:4b
+    depends_on:
+      - ollama
+      - searxng
+    networks:
+      - agri_network
+    restart: unless-stopped
+
+networks:
+  agri_network:
+    driver: bridge
+
+volumes:
+  ollama_data:
