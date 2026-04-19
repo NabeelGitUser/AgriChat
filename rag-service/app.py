@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from rag_pipeline_ollama import DocumentLoader, TextChunker, VectorStore, OllamaRAG
+from rag_pipeline_ollama import DocumentLoader, TextChunker, VectorStore, OllamaRAG, clean_answer
 
 # Setup logging
 logging.basicConfig(
@@ -37,21 +37,17 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 SEARCH_SERVICE_URL = os.getenv("SEARCH_SERVICE_URL", "http://search-service:8082")
 
-# Confidence threshold — if RAG answer is too short it means
-# the KCC database didn't have a good answer
+# Confidence threshold
 MIN_ANSWER_LENGTH = 50
 
-# Ensure directories exist
 os.makedirs(KNOWLEDGE_BASE_DIR, exist_ok=True)
 
-# Initialize FastAPI
 app = FastAPI(
     title="RAG Knowledge Base API",
     description="API for RAG system with chat and document management",
     version="1.0.0"
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,6 +61,7 @@ vector_store: Optional[VectorStore] = None
 rag_system: Optional[OllamaRAG] = None
 is_initialized = False
 
+
 # ==================== Pydantic Models ====================
 
 class ChatRequest(BaseModel):
@@ -73,6 +70,7 @@ class ChatRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Model temperature")
     max_tokens: int = Field(512, ge=50, le=2048, description="Maximum tokens to generate")
     use_web_fallback: bool = Field(True, description="Use web search if KCC database has no good answer")
+
 
 class ChatResponse(BaseModel):
     question: str
@@ -83,12 +81,14 @@ class ChatResponse(BaseModel):
     timestamp: str
     used_web_search: bool = False
 
+
 class DocumentInfo(BaseModel):
     filename: str
     filepath: str
     size_bytes: int
     uploaded_at: str
     file_type: str
+
 
 class SystemStatus(BaseModel):
     status: str
@@ -99,16 +99,17 @@ class SystemStatus(BaseModel):
     embedding_model: str
     knowledge_base_dir: str
 
+
 class RebuildResponse(BaseModel):
     status: str
     documents_processed: int
     chunks_created: int
     message: str
 
+
 # ==================== Helper Functions ====================
 
 def initialize_rag_system():
-    """Initialize or reinitialize the RAG system"""
     global vector_store, rag_system, is_initialized
 
     try:
@@ -140,7 +141,6 @@ def initialize_rag_system():
 
 
 def rebuild_index_sync():
-    """Rebuild the vector index from knowledge base"""
     global vector_store, rag_system
 
     try:
@@ -177,7 +177,6 @@ def rebuild_index_sync():
 
 
 def get_documents_list() -> List[DocumentInfo]:
-    """Get list of all documents in knowledge base"""
     documents = []
     kb_path = Path(KNOWLEDGE_BASE_DIR)
 
@@ -203,8 +202,7 @@ def is_answer_confident(answer: str) -> bool:
         return False
     if len(answer.strip()) < MIN_ANSWER_LENGTH:
         return False
-    
-    # Check for phrases that indicate no good answer was found
+
     uncertain_phrases = [
         "please provide",
         "i need the complete",
@@ -222,29 +220,28 @@ def is_answer_confident(answer: str) -> bool:
         "provide the full",
         "need more context"
     ]
-    
+
     answer_lower = answer.lower()
     for phrase in uncertain_phrases:
         if phrase in answer_lower:
             return False
-    
+
     return True
 
 
-async def get_web_search_answer(question: str, temperature: float, max_tokens: int) -> tuple[str, List[str]]:
+async def get_web_search_answer(
+    question: str,
+    temperature: float,
+    max_tokens: int
+) -> tuple[str, List[str]]:
     """Call search service and generate answer from web results"""
     try:
         logger.info(f"Falling back to web search for: {question[:50]}...")
 
         async with httpx.AsyncClient(timeout=60) as client:
-            # Get web search results
             search_resp = await client.post(
                 f"{SEARCH_SERVICE_URL}/search",
-                json={
-                    "query": question,
-                    "num_results": 3,
-                    "rewrite": True
-                }
+                json={"query": question, "num_results": 3, "rewrite": True}
             )
 
             if search_resp.status_code != 200:
@@ -257,7 +254,6 @@ async def get_web_search_answer(question: str, temperature: float, max_tokens: i
             if not results:
                 return None, []
 
-            # Build context from web results
             context = "\n\n".join([
                 f"Source: {r['title']}\n{r['content']}"
                 for r in results
@@ -265,22 +261,24 @@ async def get_web_search_answer(question: str, temperature: float, max_tokens: i
 
             sources = [r['url'] for r in results]
 
-            # Detect language
             tamil_chars = set('அஆஇஈஉஊஎஏஐஒஓஔகசடதநபமயரலவழளறனஜஷஸஹ')
             is_tamil = any(char in tamil_chars for char in question)
 
             if is_tamil:
-                prompt = f"""நீங்கள் ஒரு விவசாய நிபுணர். கீழே உள்ள இணைய தகவல்களை பயன்படுத்தி தமிழில் மட்டும் 3-4 வரிகளில் பதில் சொல்லுங்கள்.
+                prompt = f"""நீங்கள் ஒரு நிபுணர். கீழே உள்ள இணைய தகவல்களை பயன்படுத்தி தமிழில் மட்டும் 3-4 வரிகளில் நேரடியாக பதில் சொல்லுங்கள்.
+முடிவு லேபல்கள் எழுதாதீர்கள். நேரடியாக பதிலை மட்டும் கொடுங்கள்.
 
 தகவல்கள்:
 {context}
 
 கேள்வி: {question}
 
-தமிழில் பதில்:"""
+பதில்:"""
             else:
-                prompt = f"""You are an expert agricultural assistant for Tamil Nadu farmers.
+                prompt = f"""You are a knowledgeable assistant.
 Use the following web search results to answer the question in 3-4 clear lines.
+Do NOT write "YES agriculture related" or "Not agriculture related" or any label.
+Output ONLY the direct answer.
 
 Web Results:
 {context}
@@ -289,9 +287,8 @@ Question: {question}
 
 Answer:"""
 
-            # Generate answer using Ollama directly
-            import requests
-            response = requests.post(
+            import requests as req_lib
+            response = req_lib.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={
                     "model": OLLAMA_MODEL,
@@ -306,7 +303,9 @@ Answer:"""
             )
 
             if response.status_code == 200:
-                answer = response.json().get('response', '').strip()
+                raw_answer = response.json().get('response', '').strip()
+                # Clean the web search answer too
+                answer = clean_answer(raw_answer)
                 logger.info("✓ Web search answer generated")
                 return answer, sources
             else:
@@ -360,7 +359,6 @@ async def root():
 @app.get("/status", response_model=SystemStatus)
 async def get_status():
     documents = get_documents_list()
-
     return SystemStatus(
         status="ready" if is_initialized else "not_initialized",
         is_initialized=is_initialized,
@@ -500,10 +498,7 @@ async def delete_document(filename: str):
 
     try:
         os.remove(file_path)
-        return {
-            "status": "success",
-            "message": f"File '{filename}' deleted successfully"
-        }
+        return {"status": "success", "message": f"File '{filename}' deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
