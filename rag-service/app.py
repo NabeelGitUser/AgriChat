@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from rag_pipeline_ollama import DocumentLoader, TextChunker, VectorStore, OllamaRAG, clean_answer
+from rag_pipeline_ollama import DocumentLoader, TextChunker, VectorStore, OllamaRAG
 
 # Setup logging
 logging.basicConfig(
@@ -37,17 +37,21 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 SEARCH_SERVICE_URL = os.getenv("SEARCH_SERVICE_URL", "http://search-service:8082")
 
-# Confidence threshold
+# Confidence threshold — if RAG answer is too short it means
+# the KCC database didn't have a good answer
 MIN_ANSWER_LENGTH = 50
 
+# Ensure directories exist
 os.makedirs(KNOWLEDGE_BASE_DIR, exist_ok=True)
 
+# Initialize FastAPI
 app = FastAPI(
     title="RAG Knowledge Base API",
     description="API for RAG system with chat and document management",
     version="1.0.0"
 )
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,7 +65,6 @@ vector_store: Optional[VectorStore] = None
 rag_system: Optional[OllamaRAG] = None
 is_initialized = False
 
-
 # ==================== Pydantic Models ====================
 
 class ChatRequest(BaseModel):
@@ -70,7 +73,6 @@ class ChatRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0, description="Model temperature")
     max_tokens: int = Field(512, ge=50, le=2048, description="Maximum tokens to generate")
     use_web_fallback: bool = Field(True, description="Use web search if KCC database has no good answer")
-
 
 class ChatResponse(BaseModel):
     question: str
@@ -81,14 +83,12 @@ class ChatResponse(BaseModel):
     timestamp: str
     used_web_search: bool = False
 
-
 class DocumentInfo(BaseModel):
     filename: str
     filepath: str
     size_bytes: int
     uploaded_at: str
     file_type: str
-
 
 class SystemStatus(BaseModel):
     status: str
@@ -99,17 +99,16 @@ class SystemStatus(BaseModel):
     embedding_model: str
     knowledge_base_dir: str
 
-
 class RebuildResponse(BaseModel):
     status: str
     documents_processed: int
     chunks_created: int
     message: str
 
-
 # ==================== Helper Functions ====================
 
 def initialize_rag_system():
+    """Initialize or reinitialize the RAG system"""
     global vector_store, rag_system, is_initialized
 
     try:
@@ -141,6 +140,7 @@ def initialize_rag_system():
 
 
 def rebuild_index_sync():
+    """Rebuild the vector index from knowledge base"""
     global vector_store, rag_system
 
     try:
@@ -177,6 +177,7 @@ def rebuild_index_sync():
 
 
 def get_documents_list() -> List[DocumentInfo]:
+    """Get list of all documents in knowledge base"""
     documents = []
     kb_path = Path(KNOWLEDGE_BASE_DIR)
 
@@ -195,7 +196,7 @@ def get_documents_list() -> List[DocumentInfo]:
 
 
 def is_answer_confident(answer: str) -> bool:
-    """Check if the RAG answer is good enough or needs web fallback"""
+    """Check if the answer is good enough or needs web fallback"""
     if not answer:
         return False
     if answer.startswith("Error"):
@@ -204,6 +205,7 @@ def is_answer_confident(answer: str) -> bool:
         return False
 
     uncertain_phrases = [
+        # English uncertain phrases
         "please provide",
         "i need the complete",
         "context is incomplete",
@@ -218,7 +220,48 @@ def is_answer_confident(answer: str) -> bool:
         "incomplete",
         "not enough information",
         "provide the full",
-        "need more context"
+        "need more context",
+        "please contact",
+        "contact the department",
+        "contact your nearest",
+        "i cannot provide",
+        "i am unable",
+        "no specific information",
+        "not specified",
+        "consult a",
+        "seek advice",
+        "i recommend contacting",
+        "for more information",
+        "please consult",
+        "they will have",
+        "will have the most",
+        "up-to-date details",
+        "further assistance",
+        "cannot answer",
+        "don't know",
+        "do not know",
+        "no data",
+        "not found",
+        "beyond my",
+        "outside my",
+        "i suggest contacting",
+        "refer to",
+        "check with",
+        "verify with",
+        "i would recommend",
+        "please check",
+        "please refer",
+        "please visit",
+        "please call",
+        "helpline",
+        "toll free",
+        
+        # Tamil uncertain phrases
+        "தொடர்பு கொள்ளவும்",
+        "அலுவலகத்தை",
+        "மேலும் தகவல்",
+        "தெரியவில்லை",
+        "கிடைக்கவில்லை",
     ]
 
     answer_lower = answer.lower()
@@ -228,20 +271,66 @@ def is_answer_confident(answer: str) -> bool:
 
     return True
 
+def is_kcc_relevant(question: str, retrieved_chunks: list) -> bool:
+    """Check if KCC retrieved chunks are actually relevant to the question"""
+    if not retrieved_chunks:
+        return False
+    
+    # Get the best similarity score (lowest distance = most similar)
+    best_distance = min(chunk['distance'] for chunk in retrieved_chunks)
+    
+    # If best distance is too high, chunks are not relevant
+    # FAISS L2 distance — lower is better
+    # Threshold: if distance > 150, chunks are not relevant
+    RELEVANCE_THRESHOLD = 150
+    
+    if best_distance > RELEVANCE_THRESHOLD:
+        return False
+    
+    return True
 
-async def get_web_search_answer(
-    question: str,
-    temperature: float,
-    max_tokens: int
-) -> tuple[str, List[str]]:
+def clean_answer(answer: str) -> str:
+    """Remove any unwanted prefixes or labels from the answer"""
+    lines = answer.strip().split('\n')
+    cleaned_lines = []
+    
+    skip_phrases = [
+        'yes -', 'no -', 'yes—', 'no—',
+        'yes:', 'no:',
+        'agriculture related:', 'not agriculture related:',
+        'answer:', 'question:', 'metadata:',
+        'yes - agriculture', 'not agriculture',
+        'yes, this is', 'no, this is',
+    ]
+    
+    for line in lines:
+        line_lower = line.lower().strip()
+        should_skip = any(line_lower.startswith(phrase) for phrase in skip_phrases)
+        if not should_skip and line.strip():
+            # Remove inline prefixes like "YES - agriculture related:\n\n"
+            for phrase in skip_phrases:
+                if phrase in line_lower:
+                    idx = line_lower.index(phrase)
+                    line = line[idx + len(phrase):].strip()
+            cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines).strip()
+
+
+async def get_web_search_answer(question: str, temperature: float, max_tokens: int) -> tuple[str, List[str]]:
     """Call search service and generate answer from web results"""
     try:
         logger.info(f"Falling back to web search for: {question[:50]}...")
 
         async with httpx.AsyncClient(timeout=60) as client:
+            # Get web search results
             search_resp = await client.post(
                 f"{SEARCH_SERVICE_URL}/search",
-                json={"query": question, "num_results": 3, "rewrite": True}
+                json={
+                    "query": question,
+                    "num_results": 3,
+                    "rewrite": True
+                }
             )
 
             if search_resp.status_code != 200:
@@ -254,6 +343,7 @@ async def get_web_search_answer(
             if not results:
                 return None, []
 
+            # Build context from web results
             context = "\n\n".join([
                 f"Source: {r['title']}\n{r['content']}"
                 for r in results
@@ -261,34 +351,39 @@ async def get_web_search_answer(
 
             sources = [r['url'] for r in results]
 
+            # Detect language
             tamil_chars = set('அஆஇஈஉஊஎஏஐஒஓஔகசடதநபமயரலவழளறனஜஷஸஹ')
             is_tamil = any(char in tamil_chars for char in question)
 
             if is_tamil:
-                prompt = f"""நீங்கள் ஒரு நிபுணர். கீழே உள்ள இணைய தகவல்களை பயன்படுத்தி தமிழில் மட்டும் 3-4 வரிகளில் நேரடியாக பதில் சொல்லுங்கள்.
-முடிவு லேபல்கள் எழுதாதீர்கள். நேரடியாக பதிலை மட்டும் கொடுங்கள்.
+                prompt = f"""நீங்கள் ஒரு விவசாய நிபுணர்.
+            கீழே உள்ள இணைய தகவல்களை பயன்படுத்தி தமிழில் மட்டும் 3-4 வரிகளில் நேரடியாக பதில் சொல்லுங்கள்.
+            "YES", "NO" அல்லது எந்த முன்னொட்டும் எழுதாதீர்கள். நேரடியாக பதிலை மட்டும் எழுதுங்கள்.
 
-தகவல்கள்:
-{context}
+            தகவல்கள்:
+            {context}
 
-கேள்வி: {question}
+            கேள்வி: {question}
 
-பதில்:"""
+            பதில்:"""
             else:
-                prompt = f"""You are a knowledgeable assistant.
-Use the following web search results to answer the question in 3-4 clear lines.
-Do NOT write "YES agriculture related" or "Not agriculture related" or any label.
-Output ONLY the direct answer.
+                prompt = f"""You are an expert agricultural assistant for Tamil Nadu farmers.
+            Use the following web search results to answer in 3-4 clear lines.
 
-Web Results:
-{context}
+            IMPORTANT RULES:
+            - Do NOT write "YES", "NO", "agriculture related", "not agriculture related"
+            - Do NOT write QUESTION, ANSWER, METADATA or any labels
+            - Output ONLY the answer lines, nothing else
 
-Question: {question}
+            Web Results:
+            {context}
 
-Answer:"""
+            Question: {question}
 
-            import requests as req_lib
-            response = req_lib.post(
+            Answer:"""
+            # Generate answer using Ollama directly
+            import requests
+            response = requests.post(
                 f"{OLLAMA_URL}/api/generate",
                 json={
                     "model": OLLAMA_MODEL,
@@ -303,9 +398,7 @@ Answer:"""
             )
 
             if response.status_code == 200:
-                raw_answer = response.json().get('response', '').strip()
-                # Clean the web search answer too
-                answer = clean_answer(raw_answer)
+                answer = response.json().get('response', '').strip()
                 logger.info("✓ Web search answer generated")
                 return answer, sources
             else:
@@ -359,6 +452,7 @@ async def root():
 @app.get("/status", response_model=SystemStatus)
 async def get_status():
     documents = get_documents_list()
+
     return SystemStatus(
         status="ready" if is_initialized else "not_initialized",
         is_initialized=is_initialized,
@@ -372,11 +466,6 @@ async def get_status():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """
-    Chat with the RAG system.
-    Automatically falls back to web search if KCC database
-    doesn't have a confident answer.
-    """
     if not is_initialized:
         raise HTTPException(
             status_code=503,
@@ -386,7 +475,11 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"Chat request: {request.question[:100]}...")
 
-        # Step 1: Try KCC database first
+        answer = ""
+        sources = []
+        used_web = False
+
+        # Step 1: Always try KCC database first
         result = rag_system.query(
             question=request.question,
             k=request.k,
@@ -394,26 +487,34 @@ async def chat(request: ChatRequest):
             max_tokens=request.max_tokens
         )
 
-        answer = result['answer']
+        answer = clean_answer(result['answer'])
         sources = result['sources']
         used_web = False
 
-        # Step 2: If answer not confident, fall back to web search
-        if request.use_web_fallback and not is_answer_confident(answer):
-            logger.info("KCC answer not confident enough, trying web search...")
+        # Step 2: Check confidence — if low, use web search
+        kcc_relevant = is_kcc_relevant(
+            request.question, 
+            result['retrieved_chunks']
+        )
+
+        if request.use_web_fallback and (
+            not is_answer_confident(answer) or not kcc_relevant
+        ):
+            logger.info(f"KCC not relevant or low confidence, trying web search...")
+            
             web_answer, web_sources = await get_web_search_answer(
                 request.question,
                 request.temperature,
                 request.max_tokens
             )
 
-            if web_answer and is_answer_confident(web_answer):
-                answer = web_answer
+            if web_answer and len(web_answer.strip()) > 20:
+                answer = clean_answer(web_answer)
                 sources = web_sources
                 used_web = True
                 logger.info("✓ Using web search answer")
             else:
-                logger.info("Web search also failed, using KCC answer")
+                logger.info("Web search failed, keeping KCC answer")
 
         logger.info(f"✓ Response generated (web_search={used_web})")
 
@@ -498,7 +599,10 @@ async def delete_document(filename: str):
 
     try:
         os.remove(file_path)
-        return {"status": "success", "message": f"File '{filename}' deleted successfully"}
+        return {
+            "status": "success",
+            "message": f"File '{filename}' deleted successfully"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
