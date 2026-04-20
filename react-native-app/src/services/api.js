@@ -1,7 +1,7 @@
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 // Change these to your machine's IP when running on a real device.
 // Use 'localhost' for simulators / emulators.
-const BASE_IP = '192.168.1.47'; // ← Change to your PC's local IP address
+const BASE_IP = '10.125.137.65'; // ← Change to your PC's local IP address
 
 export const API_URLS = {
   rag: `http://${BASE_IP}:8080`,

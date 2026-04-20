@@ -95,18 +95,22 @@ export default function MainScreen({ currentUser, onLogout }) {
   };
 
   const closeSidebar = () => {
-    Animated.parallel([
-      Animated.timing(sidebarAnim, {
-        toValue: -SIDEBAR_W,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayAnim, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-    ]).start(() => setSidebarOpen(false));
+  Animated.parallel([
+    Animated.timing(sidebarAnim, {
+      toValue: -SIDEBAR_W,
+      duration: 260,
+      useNativeDriver: true,
+    }),
+    Animated.timing(overlayAnim, {
+      toValue: 0,
+      duration: 260,
+      useNativeDriver: true,
+    }),
+  ]).start(() => {
+    setSidebarOpen(false);
+    sidebarAnim.setValue(-SIDEBAR_W);  // 👈 force reset position
+    overlayAnim.setValue(0);           // 👈 force reset overlay
+  });
   };
 
   const handleSelectChat = (session) => {
@@ -266,12 +270,12 @@ export default function MainScreen({ currentUser, onLogout }) {
           chatHistory={chatHistory}
           activeChatId={activeSession?.id}
           onNewChat={() => {
-            startNewSession();
             closeSidebar();
+            setTimeout(() => startNewSession(), 260);  // 👈 wait for close animation
           }}
           onSelectChat={(s) => {
-            handleSelectChat(s);
             closeSidebar();
+            setTimeout(() => handleSelectChat(s), 260);  // 👈 wait for close animation
           }}
           onDeleteChat={handleDeleteChat}
           onProfilePress={() => {

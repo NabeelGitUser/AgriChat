@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  Image, Alert, ActivityIndicator, ScrollView,
+  Image, Alert, ActivityIndicator, ScrollView, Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { analyzeImage } from '../services/api';
 import { COLORS, FONTS, RADIUS, SHADOWS } from '../utils/theme';
+
+const { height: SCREEN_H } = Dimensions.get('window');
 
 export default function ImagePickerModal({ visible, onClose, onAnalysisResult }) {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -57,7 +59,7 @@ export default function ImagePickerModal({ visible, onClose, onAnalysisResult })
     } catch (e) {
       Alert.alert(
         'Analysis failed',
-        e.message.includes('fetch') 
+        e.message.includes('fetch')
           ? 'Cannot reach the image service. Make sure your backend is running and check the IP in api.js.'
           : e.message
       );
@@ -111,106 +113,113 @@ ${result.treatment_advice}`;
             Identify crops and detect diseases using AI
           </Text>
 
-          {!result ? (
-            <>
-              {/* Image preview */}
-              {selectedImage ? (
-                <View style={styles.previewContainer}>
-                  <Image
-                    source={{ uri: selectedImage.uri }}
-                    style={styles.preview}
-                    resizeMode="cover"
-                  />
-                  <TouchableOpacity
-                    style={styles.changeBtn}
-                    onPress={() => setSelectedImage(null)}
-                  >
-                    <Text style={styles.changeBtnText}>✕ Remove</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.pickArea}>
-                  <Text style={styles.pickIcon}>🌾</Text>
-                  <Text style={styles.pickText}>
-                    Select a crop image to analyze
-                  </Text>
-                  <View style={styles.pickButtons}>
+          {/* ── Scrollable content area ── */}
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {!result ? (
+              <>
+                {/* Image preview OR picker */}
+                {selectedImage ? (
+                  <View style={styles.previewContainer}>
+                    <Image
+                      source={{ uri: selectedImage.uri }}
+                      style={styles.preview}
+                      resizeMode="cover"
+                      onError={(e) => console.log('Image load error:', e.nativeEvent.error)}
+                    />
                     <TouchableOpacity
-                      style={styles.pickBtn}
-                      onPress={pickFromGallery}
-                      activeOpacity={0.85}
+                      style={styles.changeBtn}
+                      onPress={() => setSelectedImage(null)}
                     >
-                      <Text style={styles.pickBtnIcon}>🖼️</Text>
-                      <Text style={styles.pickBtnText}>Gallery</Text>
+                      <Text style={styles.changeBtnText}>✕ Remove</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.pickBtn}
-                      onPress={pickFromCamera}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.pickBtnIcon}>📷</Text>
-                      <Text style={styles.pickBtnText}>Camera</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              {/* Analyze button */}
-              <TouchableOpacity
-                style={[
-                  styles.analyzeBtn,
-                  (!selectedImage || loading) && styles.analyzeBtnDisabled,
-                ]}
-                onPress={handleAnalyze}
-                disabled={!selectedImage || loading}
-                activeOpacity={0.85}
-              >
-                {loading ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator color="#fff" size="small" />
-                    <Text style={styles.analyzeBtnText}>Analyzing...</Text>
                   </View>
                 ) : (
-                  <Text style={styles.analyzeBtnText}>
-                    🔍 Analyze Image
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </>
-          ) : (
-            /* Results */
-            <ScrollView style={styles.results} showsVerticalScrollIndicator={false}>
-              {[
-                { icon: '🌱', title: 'Crop Identification', value: result.crop_identification },
-                { icon: '🦠', title: 'Disease Detection', value: result.disease_detection },
-                { icon: '📋', title: 'Crop Description', value: result.crop_description },
-                { icon: '💊', title: 'Treatment Advice', value: result.treatment_advice },
-              ].map((section, i) => (
-                <View key={i} style={styles.resultSection}>
-                  <View style={styles.resultHeader}>
-                    <Text style={styles.resultIcon}>{section.icon}</Text>
-                    <Text style={styles.resultTitle}>{section.title}</Text>
+                  <View style={styles.pickArea}>
+                    <Text style={styles.pickIcon}>🌾</Text>
+                    <Text style={styles.pickText}>
+                      Select a crop image to analyze
+                    </Text>
+                    <View style={styles.pickButtons}>
+                      <TouchableOpacity
+                        style={styles.pickBtn}
+                        onPress={pickFromGallery}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.pickBtnIcon}>🖼️</Text>
+                        <Text style={styles.pickBtnText}>Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.pickBtn}
+                        onPress={pickFromCamera}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.pickBtnIcon}>📷</Text>
+                        <Text style={styles.pickBtnText}>Camera</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={styles.resultText}>{section.value}</Text>
-                </View>
-              ))}
+                )}
 
-              <TouchableOpacity
-                style={styles.sendBtn}
-                onPress={handleSendToChat}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.sendBtnText}>💬 Send to Chat</Text>
-              </TouchableOpacity>
+                {/* Analyze button */}
+                <TouchableOpacity
+                  style={[
+                    styles.analyzeBtn,
+                    (!selectedImage || loading) && styles.analyzeBtnDisabled,
+                  ]}
+                  onPress={handleAnalyze}
+                  disabled={!selectedImage || loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.analyzeBtnText}>Analyzing...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.analyzeBtnText}>🔍 Analyze Image</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              /* ── Results (fully scrollable) ── */
+              <>
+                {[
+                  { icon: '🌱', title: 'Crop Identification', value: result.crop_identification },
+                  { icon: '🦠', title: 'Disease Detection', value: result.disease_detection },
+                  { icon: '📋', title: 'Crop Description', value: result.crop_description },
+                  { icon: '💊', title: 'Treatment Advice', value: result.treatment_advice },
+                ].map((section, i) => (
+                  <View key={i} style={styles.resultSection}>
+                    <View style={styles.resultHeader}>
+                      <Text style={styles.resultIcon}>{section.icon}</Text>
+                      <Text style={styles.resultTitle}>{section.title}</Text>
+                    </View>
+                    <Text style={styles.resultText}>{section.value}</Text>
+                  </View>
+                ))}
 
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={() => { setResult(null); setSelectedImage(null); }}
-              >
-                <Text style={styles.retryBtnText}>Analyze another image</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={handleSendToChat}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.sendBtnText}>💬 Send to Chat</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => { setResult(null); setSelectedImage(null); }}
+                >
+                  <Text style={styles.retryBtnText}>Analyze another image</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
 
           <TouchableOpacity style={styles.closeRow} onPress={handleClose}>
             <Text style={styles.closeText}>Close</Text>
@@ -232,9 +241,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    paddingBottom: 36,
+    paddingBottom: 20,
     paddingTop: 16,
-    maxHeight: '95%',
+    height: SCREEN_H * 0.88,   // fixed height so scroll works properly
   },
   handle: {
     width: 40, height: 4, backgroundColor: COLORS.border,
@@ -245,8 +254,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: FONTS.sizes.sm, color: COLORS.textMuted, marginBottom: 20,
+    fontSize: FONTS.sizes.sm, color: COLORS.textMuted, marginBottom: 16,
   },
+
+  // ── Scroll area fills remaining space
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 16,
+  },
+
+  // ── Picker
   pickArea: {
     borderWidth: 2, borderColor: COLORS.primaryMuted, borderStyle: 'dashed',
     borderRadius: RADIUS.lg, padding: 28, alignItems: 'center', marginBottom: 16,
@@ -267,14 +286,28 @@ const styles = StyleSheet.create({
   pickBtnText: {
     fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.primary,
   },
-  previewContainer: { borderRadius: RADIUS.lg, overflow: 'hidden', marginBottom: 16, ...SHADOWS.sm, minHeight: 200, backgroundColor: '#eee'  },
-  preview: { width: '100%', height: 200, borderRadius: RADIUS.lg },
+
+  // ── Preview
+  previewContainer: {
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: 16,
+    ...SHADOWS.sm,
+    backgroundColor: '#f0f0f0',
+  },
+  preview: {
+    width: '100%',
+    height: 260,          // tall enough to be clearly visible
+    borderRadius: RADIUS.lg,
+  },
   changeBtn: {
     position: 'absolute', top: 8, right: 8,
     backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: RADIUS.full,
     paddingHorizontal: 12, paddingVertical: 5,
   },
   changeBtnText: { color: '#fff', fontSize: FONTS.sizes.xs, fontWeight: '600' },
+
+  // ── Analyze button
   analyzeBtn: {
     backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     paddingVertical: 15, alignItems: 'center', marginBottom: 10, ...SHADOWS.sm,
@@ -282,7 +315,8 @@ const styles = StyleSheet.create({
   analyzeBtnDisabled: { opacity: 0.4 },
   analyzeBtnText: { color: '#fff', fontSize: FONTS.sizes.md, fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  results: { maxHeight: '65%' },
+
+  // ── Results
   resultSection: {
     backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.md,
     padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.borderLight,
@@ -302,6 +336,8 @@ const styles = StyleSheet.create({
   sendBtnText: { color: '#fff', fontSize: FONTS.sizes.md, fontWeight: '700' },
   retryBtn: { paddingVertical: 10, alignItems: 'center' },
   retryBtnText: { fontSize: FONTS.sizes.sm, color: COLORS.textMuted },
-  closeRow: { paddingTop: 8, alignItems: 'center' },
+
+  // ── Close
+  closeRow: { paddingTop: 12, alignItems: 'center' },
   closeText: { fontSize: FONTS.sizes.sm, color: COLORS.textMuted },
 });
