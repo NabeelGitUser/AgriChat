@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 36,
     paddingTop: 16,
-    maxHeight: '92%',
+    maxHeight: '95%',
   },
   handle: {
     width: 40, height: 4, backgroundColor: COLORS.border,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   pickBtnText: {
     fontSize: FONTS.sizes.sm, fontWeight: '600', color: COLORS.primary,
   },
-  previewContainer: { borderRadius: RADIUS.lg, overflow: 'hidden', marginBottom: 16, ...SHADOWS.sm },
+  previewContainer: { borderRadius: RADIUS.lg, overflow: 'hidden', marginBottom: 16, ...SHADOWS.sm, minHeight: 200, backgroundColor: '#eee'  },
   preview: { width: '100%', height: 200, borderRadius: RADIUS.lg },
   changeBtn: {
     position: 'absolute', top: 8, right: 8,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   analyzeBtnDisabled: { opacity: 0.4 },
   analyzeBtnText: { color: '#fff', fontSize: FONTS.sizes.md, fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  results: { maxHeight: 400 },
+  results: { maxHeight: '65%' },
   resultSection: {
     backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.md,
     padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.borderLight,

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { saveUser } from '../utils/storage';
 import { COLORS, FONTS, RADIUS, SHADOWS } from '../utils/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterScreen({ navigation, onLogin }) {
   const [name, setName] = useState('');
@@ -42,7 +43,6 @@ export default function RegisterScreen({ navigation, onLogin }) {
         joinedAt: new Date().toISOString(),
       };
       const saved = await saveUser(user);
-      const { AsyncStorage } = await import('@react-native-async-storage/async-storage');
       await AsyncStorage.setItem('currentUser', JSON.stringify(saved));
       onLogin(saved);
     } catch (e) {
