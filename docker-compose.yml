@@ -59,6 +59,22 @@ services:
       - agri_network
     restart: unless-stopped
 
+  image-service:
+    build:
+      context: ./image-service
+      dockerfile: Dockerfile
+    container_name: image-service
+    ports:
+      - "8084:8084"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_VISION_MODEL=llava:7b
+    depends_on:
+      - ollama
+    networks:
+      - agri_network
+    restart: unless-stopped
+
   search-service:
     build:
       context: ./web-search-service
