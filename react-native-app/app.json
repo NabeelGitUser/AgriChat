@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "AgriChat",
+    "slug": "agrichat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#2D7A4F"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.agrichat.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "AgriChat needs photo access to analyze crop images for disease detection.",
+        "NSCameraUsageDescription": "AgriChat needs camera access to capture crop images for disease detection."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2D7A4F"
+      },
+      "package": "com.agrichat.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AgriChat needs photo access to analyze crop images.",
+          "cameraPermission": "AgriChat needs camera access to capture crop images."
+        }
+      ]
+    ]
+  }
+}
